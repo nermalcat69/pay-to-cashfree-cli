@@ -1,6 +1,9 @@
-# pay-to-cashfree-cli
+# Cashfree Payments with CLI
 
-A terminal storefront boilerplate. Customers browse products and pay via Cashfree — entirely from the command line. The Go CLI renders a payment QR code; the Fastify backend holds the Cashfree credentials and streams payment status in real time.
+A terminal storefront boilerplate. Customers browse products and pay via Cashfree — entirely from the command line. The Go CLI renders a payment QR code; the Fastify backend 
+holds the Cashfree credentials and streams payment status in real time.
+
+Demo URL: [Tweet](https://x.com/arjunaditya_/status/2063525153926164776) 
 
 ```
 Customer terminal                  Your server (Bun or Cloudflare Workers)
