@@ -1,0 +1,12 @@
+name = "store-backend"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (credentials) are never stored here.
+# Set them once with:
+#   wrangler secret put CASHFREE_APP_ID
+#   wrangler secret put CASHFREE_SECRET_KEY
+
+[observability]
+enabled = true

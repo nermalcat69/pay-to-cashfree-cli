@@ -3,14 +3,14 @@
 A terminal storefront boilerplate. Customers browse products and pay via Cashfree — entirely from the command line. The Go CLI renders a payment QR code; the Fastify backend holds the Cashfree credentials and streams payment status in real time.
 
 ```
-Customer terminal                  Your server
-┌────────────────┐                 ┌──────────────────────────┐
-│  Go CLI        │ ── STORE_API ──▶│  Fastify backend         │
-│  (no secrets)  │ ◀── SSE ───────│  (Cashfree creds in env) │
-└────────────────┘                 └──────────┬───────────────┘
-                                               │
-                                               ▼
-                                          Cashfree API
+Customer terminal                  Your server (Bun or Cloudflare Workers)
+┌────────────────┐                 ┌──────────────────────────────────────┐
+│  Go CLI        │ ── STORE_API ──▶│  Fastify backend                     │
+│  (no secrets)  │ ◀── SSE ───────│  Cashfree creds live here, never CLI │
+└────────────────┘                 └──────────────────┬───────────────────┘
+                                                       │
+                                                       ▼
+                                                  Cashfree API
 ```
 
 ## How it works
@@ -24,19 +24,27 @@ Customer terminal                  Your server
 ## Project structure
 
 ```
-cli/          Go CLI — browse, select, pay, watch status
-backend/      Fastify (Bun) API — catalog, orders, SSE payment stream
+cli/                  Go CLI — browse, select, pay, watch status
+backend/
+  src/
+    app.ts            Fastify app factory (routes shared by both runtimes)
+    server.ts         Bun entrypoint — adds SSE route, starts HTTP server
+    worker.ts         Cloudflare Workers entrypoint — fetch handler + native SSE
+    cashfree.ts       Cashfree API client
+    products.ts       Product catalog
+  wrangler.toml       Cloudflare Workers config
+  Dockerfile          Container deployment
 ```
 
 ## Setup
 
-### Backend
+### Backend (local)
 
 ```bash
 cd backend
 cp .env.example .env      # add your Cashfree sandbox keys
 bun install
-bun run dev               # starts on :8080
+bun run dev               # hot-reload on :8080
 ```
 
 Without Cashfree credentials the backend runs in **demo mode** — orders are created locally and the QR links to a dummy URL. Safe for development.
@@ -51,18 +59,35 @@ go build -o store .
 STORE_API=https://your-backend.example.com ./store
 ```
 
-The CLI binary contains **zero secrets**. Distribute it freely — it only knows the backend URL.
+The CLI binary contains **zero secrets**. Distribute it freely — it only needs the backend URL.
 
 ## Environment variables
 
 | Variable | Where | Description |
 |---|---|---|
-| `CASHFREE_APP_ID` | backend `.env` | Cashfree API key (never in CLI) |
-| `CASHFREE_SECRET_KEY` | backend `.env` | Cashfree secret (never in CLI) |
-| `PORT` | backend `.env` | Backend port (default `8080`) |
+| `CASHFREE_APP_ID` | backend `.env` / Workers secret | Cashfree API key (never in CLI) |
+| `CASHFREE_SECRET_KEY` | backend `.env` / Workers secret | Cashfree secret (never in CLI) |
+| `PORT` | backend `.env` | Bun server port (default `8080`) |
 | `STORE_API` | CLI runtime | Backend URL (default `http://localhost:8080`) |
 
-## Deploy backend
+## Deploy
+
+### Cloudflare Workers
+
+```bash
+cd backend
+bun run cf:secret CASHFREE_APP_ID      # prompted — stored encrypted by Cloudflare
+bun run cf:secret CASHFREE_SECRET_KEY
+bun run cf:deploy
+```
+
+Local Workers emulation:
+
+```bash
+bun run cf:dev     # wrangler dev on :8787
+```
+
+### Docker / VPS
 
 ```bash
 cd backend
@@ -77,4 +102,4 @@ docker run -p 8080:8080 \
 
 - **Products** — edit `backend/src/products.ts`
 - **Store name / branding** — edit the title string in `cli/main.go`
-- **Poll interval** — change `POLL_INTERVAL_MS` in `backend/src/server.ts`
+- **Poll interval** — change `POLL_INTERVAL_MS` in `backend/src/server.ts` and `backend/src/worker.ts`

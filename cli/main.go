@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -19,7 +20,7 @@ import (
 
 // ── backend URL (override with STORE_API env var) ─────────────────────────────
 
-const defaultAPIURL = "http://localhost:8080"
+const defaultAPIURL = "http://localhost:3005"
 
 func apiURL() string {
 	if u := os.Getenv("STORE_API"); u != "" {
@@ -390,22 +391,79 @@ func main() {
 	fmt.Println(infoStyle.Render("  Waiting for payment… (Ctrl+C to exit)"))
 	fmt.Println()
 
-	err = c.streamStatus(order.OrderID, func(status OrderStatusResp) bool {
-		switch status.Status {
+	const linkExpiry = 5 * time.Minute
+	expiresAt := time.Now().Add(linkExpiry)
+
+	var (
+		mu          sync.Mutex
+		stopOnce    sync.Once
+		timerDone   = make(chan struct{})
+	)
+	stopTimer := func() { stopOnce.Do(func() { close(timerDone) }) }
+
+	// Countdown goroutine — updates the current line in place every 500ms.
+	go func() {
+		for {
+			select {
+			case <-timerDone:
+				mu.Lock()
+				fmt.Print("\r" + strings.Repeat(" ", 52) + "\r")
+				mu.Unlock()
+				return
+			default:
+				remaining := time.Until(expiresAt)
+				if remaining <= 0 {
+					mu.Lock()
+					fmt.Print("\r" + strings.Repeat(" ", 52) + "\r")
+					fmt.Println(errorStyle.Render("  Payment link expired."))
+					mu.Unlock()
+					stopTimer()
+					return
+				}
+				mins := int(remaining.Minutes())
+				secs := int(remaining.Seconds()) % 60
+				mu.Lock()
+				fmt.Printf("\r  %s  %dm %02ds   ",
+					labelStyle.Render("Link expires in"), mins, secs)
+				mu.Unlock()
+				time.Sleep(500 * time.Millisecond)
+			}
+		}
+	}()
+
+	lastStatus := ""
+	err = c.streamStatus(order.OrderID, func(s OrderStatusResp) bool {
+		switch s.Status {
 		case "PAID":
-			fmt.Println()
+			stopTimer()
+			mu.Lock()
+			fmt.Print("\r" + strings.Repeat(" ", 52) + "\r")
 			fmt.Println(successStyle.Render("  Payment received! Order confirmed."))
-			fmt.Println(labelStyle.Render(fmt.Sprintf("  Amount paid: ₹%.0f", status.AmountPaid)))
+			fmt.Println(labelStyle.Render(fmt.Sprintf("  Amount paid: ₹%.0f", s.AmountPaid)))
 			fmt.Println()
+			mu.Unlock()
 			return true
 		case "EXPIRED", "CANCELLED":
-			fmt.Println(errorStyle.Render("  Payment " + strings.ToLower(status.Status) + ". Please try again."))
+			stopTimer()
+			mu.Lock()
+			fmt.Print("\r" + strings.Repeat(" ", 52) + "\r")
+			fmt.Println(errorStyle.Render("  Payment " + strings.ToLower(s.Status) + ". Please try again."))
+			mu.Unlock()
 			return true
 		default:
-			fmt.Println(infoStyle.Render("  Status: " + status.Status))
+			// Only print when status actually changes (no ACTIVE spam).
+			if s.Status != lastStatus && s.Status != "ACTIVE" {
+				mu.Lock()
+				fmt.Print("\r" + strings.Repeat(" ", 52) + "\r\n")
+				fmt.Println(infoStyle.Render("  Status: " + s.Status))
+				mu.Unlock()
+			}
+			lastStatus = s.Status
 			return false
 		}
 	})
+
+	stopTimer()
 	if err != nil {
 		fmt.Println(errorStyle.Render("  Stream error: " + err.Error()))
 	}

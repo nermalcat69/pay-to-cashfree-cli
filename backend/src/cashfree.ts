@@ -1,6 +1,22 @@
 const BASE_URL = "https://sandbox.cashfree.com/pg";
 const API_VERSION = "2025-01-01";
 
+// Module-level credentials. Bun reads them from process.env automatically;
+// the Cloudflare Workers entry calls configure() with env bindings.
+let _appId = "";
+let _secretKey = "";
+
+export function configure(appId: string, secretKey: string) {
+  _appId = appId;
+  _secretKey = secretKey;
+}
+
+function creds() {
+  const appId = _appId || process.env.CASHFREE_APP_ID || "";
+  const secretKey = _secretKey || process.env.CASHFREE_SECRET_KEY || "";
+  return { appId, secretKey };
+}
+
 export type OrderResult = {
   order_id: string;
   payment_url: string;
@@ -16,9 +32,10 @@ export type OrderStatus = {
 };
 
 function headers() {
+  const { appId, secretKey } = creds();
   return {
-    "x-client-id": process.env.CASHFREE_APP_ID!,
-    "x-client-secret": process.env.CASHFREE_SECRET_KEY!,
+    "x-client-id": appId,
+    "x-client-secret": secretKey,
     "x-api-version": API_VERSION,
     "Content-Type": "application/json",
   };
@@ -84,5 +101,6 @@ export async function getOrderStatus(linkId: string): Promise<OrderStatus> {
 }
 
 export function isConfigured(): boolean {
-  return !!(process.env.CASHFREE_APP_ID && process.env.CASHFREE_SECRET_KEY);
+  const { appId, secretKey } = creds();
+  return !!(appId && secretKey);
 }

@@ -5,10 +5,14 @@
   "private": true,
   "scripts": {
     "dev": "bun --hot src/server.ts",
-    "start": "bun src/server.ts"
+    "start": "bun src/server.ts",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:secret": "wrangler secret put"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "wrangler": "^4.98.0"
   },
   "peerDependencies": {
     "typescript": "^5"
