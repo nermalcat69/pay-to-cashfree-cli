@@ -1,0 +1,19 @@
+{
+  "name": "backend",
+  "module": "src/server.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot src/server.ts",
+    "start": "bun src/server.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "fastify": "^5.8.5"
+  }
+}

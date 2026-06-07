@@ -1,0 +1,8 @@
+# Secrets — never commit
+.env
+*.env
+!*.env.example
+
+# Go build output
+cli/pay-to-cashfree-cli
+cli/*.exe
