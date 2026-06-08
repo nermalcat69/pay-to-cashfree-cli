@@ -68,6 +68,7 @@ type CreateOrderReq struct {
 
 type CreateOrderResp struct {
 	OrderID    string  `json:"order_id"`
+	SessionID  string  `json:"session_id"`
 	PaymentURL string  `json:"payment_url"`
 	Amount     float64 `json:"amount"`
 	IsDemo     bool    `json:"is_demo"`
@@ -205,12 +206,21 @@ func renderQR(url string) {
 	fmt.Println()
 }
 
-func printOrderSummary(order *CreateOrderResp, p Product, v Variant, name, phone, email string) {
+func qrPageURL(order *CreateOrderResp, baseURL string) string {
+	if order.SessionID == "" {
+		return ""
+	}
+	return baseURL + "/pay/" + order.OrderID + "?session_id=" + order.SessionID
+}
+
+func printOrderSummary(order *CreateOrderResp, p Product, v Variant, name, phone, email string, baseURL string) {
 	fmt.Println(labelStyle.Render("  Order ID  : ") + order.OrderID)
 	fmt.Println(labelStyle.Render("  Product   : ") + p.Name + " — " + v.Label + " (" + v.Unit + ")")
 	fmt.Println(labelStyle.Render("  Amount    : ") + priceStyle.Render(v.Price))
 	fmt.Println(labelStyle.Render("  Customer  : ") + name + " · " + phone + " · " + email)
-	fmt.Println(labelStyle.Render("  Pay URL   : ") + order.PaymentURL)
+	if url := qrPageURL(order, baseURL); url != "" {
+		fmt.Println(labelStyle.Render("  UPI QR    : ") + url)
+	}
 	if order.IsDemo {
 		fmt.Println(infoStyle.Render("  (Demo mode — no real transaction)"))
 	}
@@ -378,11 +388,14 @@ func main() {
 		fmt.Println(successStyle.Render("  Order created!"))
 	}
 	fmt.Println()
-	printOrderSummary(order, product, variant, name, phone, email)
-	renderQR(order.PaymentURL)
+	printOrderSummary(order, product, variant, name, phone, email, c.base)
+
+	if scanURL := qrPageURL(order, c.base); scanURL != "" {
+		renderQR(scanURL)
+	}
 
 	if order.IsDemo {
-		fmt.Println(infoStyle.Render("  Scan the QR to simulate. No real transaction will occur."))
+		fmt.Println(infoStyle.Render("  Demo mode — no real transaction will occur."))
 		fmt.Println()
 		return
 	}
